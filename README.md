@@ -11,7 +11,7 @@ A full-screen flip-clock study timer inspired by Flocus. Open `index.html` in an
   - Each step can have its own end sound, so study and break endings sound different.
   - Click any step chip under the clock to jump to it.
 - **Sounds**: 7 built-in alarm sounds with volume and preview, optional "keep ringing until dismissed", optional tick, and desktop notifications.
-- **Themes**: 9 color themes, 22 scenic photo backgrounds, upload your own image, and a dimming slider.
+- **Themes**: 9 color themes, 22 illustrated scenic backgrounds, upload your own image, and a dimming slider.
 
 ## Shortcuts
 `Space` start/pause · `R` reset · `S` skip step · `F` fullscreen · `T` timer panel · `P` programs · `1–8` presets · `Esc` close
@@ -19,6 +19,6 @@ A full-screen flip-clock study timer inspired by Flocus. Open `index.html` in an
 Settings, saved programs and your custom background are stored in your browser (localStorage).
 
 ## Backgrounds
-Photos in `backgrounds/` come from Wikimedia Commons under free licenses. See `backgrounds/CREDITS.md`.
-To use your own art (for example AI-generated lofi illustrations), replace `backgrounds/<name>.jpg` and
+The 22 scenic backgrounds in `backgrounds/` are original lofi/anime-style illustrations generated with OpenAI Codex
+image generation (see `backgrounds/CREDITS.md`). To swap one, replace `backgrounds/<name>.jpg` and
 `backgrounds/thumbs/<name>.jpg` with files of the same name, or use **Theme → Upload image**.
