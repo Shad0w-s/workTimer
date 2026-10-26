@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flip Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0f;
+  --bg-image: none;
+  --card: #1c1c1f;
+  --card-line: rgba(0,0,0,.55);
+  --digit: #ececec;
+  --text: #f2f2f2;
+  --muted: rgba(242,242,242,.6);
+  --panel: rgba(18,18,20,.92);
+  --panel-border: rgba(255,255,255,.08);
+  --field: rgba(255,255,255,.06);
+  --accent: #7c5cff;
+  --accent-text: #fff;
+  --dim: 0.25;
+  --card-blur: 0px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ---------- background ---------- */
+#bg {
+  position: fixed; inset: 0;
+  background: var(--bg) var(--bg-image) center / cover no-repeat;
+  transition: background .4s;
+}
+#bg::after {
+  content: ""; position: absolute; inset: 0;
+  background: #000; opacity: var(--dim);
+}
+body:not(.scenic) #bg::after { opacity: 0; }
+
+/* ---------- stage ---------- */
+#stage {
+  position: relative; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(12px, 2.5vh, 28px);
+  padding: 72px 16px 120px;
+}
+#label {
+  font-size: clamp(18px, 2.6vw, 30px); font-weight: 600; letter-spacing: .02em;
+  text-shadow: 0 2px 12px rgba(0,0,0,.35);
+  max-width: 90vw; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#sub {
+  font-size: clamp(13px, 1.5vw, 16px); color: var(--muted); min-height: 1.4em; text-align: center;
+  text-shadow: 0 1px 8px rgba(0,0,0,.35);
+}
+
+/* ---------- flip clock ---------- */
+#clock { display: flex; align-items: center; gap: clamp(8px, 1.6vw, 22px); }
+.colon { font-size: calc(var(--h) * .5); font-weight: 700; color: var(--digit); opacity: .55; line-height: 1; transform: translateY(-4%); }
+#clock { --h: min(34vw, 46vh); }
+#clock.with-hours { --h: min(24vw, 42vh); }
+.group[hidden], .colon[hidden] { display: none; }
+.card {
+  position: relative; width: calc(var(--h) * 1.18); height: var(--h);
+  border-radius: calc(var(--h) * .08);
+  perspective: calc(var(--h) * 4);
+  font-weight: 700; font-size: calc(var(--h) * .74); letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; color: var(--digit);
+  box-shadow: 0 calc(var(--h)*.04) calc(var(--h)*.12) rgba(0,0,0,.35);
+}
+.half, .flap {
+  position: absolute; left: 0; right: 0; height: 50%; overflow: hidden;
+  background: var(--card);
+  backdrop-filter: blur(var(--card-blur)); -webkit-backdrop-filter: blur(var(--card-blur));
+}
+.half span, .flap span {
+  position: absolute; left: 0; right: 0; height: var(--h);
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.top, .flap-top { top: 0; border-radius: calc(var(--h)*.08) calc(var(--h)*.08) 0 0; }
+.bottom, .flap-bottom { bottom: 0; border-radius: 0 0 calc(var(--h)*.08) calc(var(--h)*.08); }
+.top span, .flap-top span { top: 0; }
+.bottom span, .flap-bottom span { bottom: 0; }
+.top::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: max(2px, calc(var(--h)*.012));
+  background: var(--card-line); z-index: 3;
+}
+.flap { z-index: 2; visibility: hidden; backface-visibility: hidden; }
+.flap-top { transform-origin: 50% 100%; }
+.flap-bottom { transform-origin: 50% 0; transform: rotateX(90deg); }
+.card.flipping .flap { visibility: visible; }
+.card.flipping .flap-top { animation: flipTop .28s ease-in forwards; }
+.card.flipping .flap-bottom { animation: flipBottom .28s .28s ease-out forwards; }
+@keyframes flipTop { from { transform: rotateX(0); filter: brightness(1); } to { transform: rotateX(-90deg); filter: brightness(.6); } }
+@keyframes flipBottom { from { transform: rotateX(90deg); filter: brightness(1.4); } to { transform: rotateX(0); filter: brightness(1); } }
+
+/* ---------- chain timeline ---------- */
+#timeline { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: min(900px, 92vw); }
+#timeline:empty { display: none; }
+.chip {
+  border: 1px solid var(--panel-border); background: rgba(0,0,0,.28); color: var(--text);
+  border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  opacity: .7; transition: opacity .2s, background .2s;
+}
+.chip:hover { opacity: 1; }
+.chip.done { opacity: .35; text-decoration: line-through; }
+.chip.current { opacity: 1; background: var(--accent); color: var(--accent-text); border-color: transparent; }
+body.light-ui:not(.scenic) .chip { background: rgba(0,0,0,.05); }
+
+/* ---------- quick presets on stage ---------- */
+#quick { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.pill {
+  border: 1px solid var(--panel-border); background: rgba(0,0,0,.28); color: var(--text);
+  border-radius: 999px; padding: 7px 14px; font-size: 14px; font-weight: 600;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: transform .12s, background .2s;
+}
+.pill:hover { transform: translateY(-1px); background: rgba(0,0,0,.45); }
+body.light-ui:not(.scenic) .pill { background: rgba(0,0,0,.05); }
+body.light-ui:not(.scenic) .pill:hover { background: rgba(0,0,0,.1); }
+body.running #quick { visibility: hidden; }
+
+/* ---------- controls ---------- */
+#controls {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 10;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px; border-radius: 999px;
+  background: rgba(0,0,0,.35); border: 1px solid var(--panel-border);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: opacity .4s;
+}
+body.light-ui:not(.scenic) #controls, body.light-ui:not(.scenic) #topbar button { background: rgba(255,255,255,.7); }
+.ctl {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent;
+  display: grid; place-items: center; color: var(--text); transition: background .2s;
+}
+.ctl:hover { background: rgba(255,255,255,.12); }
+.ctl svg { width: 20px; height: 20px; }
+.ctl[hidden] { display: none; }
+#playBtn { width: 58px; height: 58px; background: var(--accent); color: var(--accent-text); }
+#playBtn:hover { filter: brightness(1.1); background: var(--accent); }
+#playBtn svg { width: 24px; height: 24px; }
+.ctl-text { font-size: 13px; font-weight: 700; }
+
+#topbar { position: fixed; top: 16px; right: 16px; z-index: 10; display: flex; gap: 8px; transition: opacity .4s; }
+#topbar button {
+  height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--panel-border);
+  background: rgba(0,0,0,.35); color: var(--text); font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+#topbar button:hover { background: rgba(0,0,0,.5); }
+#topbar svg { width: 18px; height: 18px; }
+body.idle #controls, body.idle #topbar { opacity: 0; }
+body.idle { cursor: none; }
+
+/* ---------- drawer ---------- */
+#drawer {
+  position: fixed; top: 0; right: 0; height: 100%; width: min(440px, 100vw);
+  background: var(--panel); border-left: 1px solid var(--panel-border);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  transform: translateX(100%); transition: transform .3s cubic-bezier(.2,.8,.2,1);
+  display: flex; flex-direction: column; z-index: 20; color: #f2f2f2;
+  user-select: text;
+}
+#drawer.open { transform: none; }
+.tabs { display: flex; gap: 4px; padding: 14px 14px 0; align-items: center; }
+.tab {
+  flex: 1; padding: 9px 4px; border: 0; border-radius: 10px; background: transparent;
+  color: rgba(255,255,255,.6); font-weight: 600; font-size: 14px;
+}
+.tab.active { background: rgba(255,255,255,.1); color: #fff; }
+#closeDrawer { flex: 0 0 36px; height: 36px; border: 0; background: transparent; color: #fff; font-size: 22px; border-radius: 10px; }
+#closeDrawer:hover { background: rgba(255,255,255,.1); }
+.pane { display: none; overflow-y: auto; padding: 16px; flex: 1; }
+.pane.active { display: block; }
+.pane h3 { margin: 20px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.5); font-weight: 600; }
+.pane h3:first-child { margin-top: 4px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field {
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); border-radius: 10px;
+  padding: 9px 10px; color: #fff; outline: none; min-width: 0;
+}
+.field:focus { border-color: var(--accent); }
+select.field option { background: #1c1c1f; }
+.num { width: 64px; text-align: center; }
+.btn {
+  border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 14px;
+  background: rgba(255,255,255,.1); color: #fff;
+}
+.btn:hover { background: rgba(255,255,255,.16); }
+.btn.primary { background: var(--accent); color: var(--accent-text); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+.btn.danger:hover { background: #c0392b; }
+.grid-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.grid-presets .btn { padding: 14px 0; font-size: 15px; }
+.hint { font-size: 12px; color: rgba(255,255,255,.45); margin-top: 8px; line-height: 1.5; }
+label.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 14px; }
+label.toggle input { width: 40px; height: 22px; accent-color: var(--accent); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* chain builder */
+#chainName { width: 100%; font-size: 16px; font-weight: 600; }
+#steps { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.step {
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 6px 8px; align-items: center;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+  padding: 10px; transition: box-shadow .15s, background .15s;
+}
+.step.dragging { background: rgba(124,92,255,.22); box-shadow: 0 10px 30px rgba(0,0,0,.45); position: relative; z-index: 5; }
+.handle {
+  grid-row: span 2; align-self: stretch; display: grid; place-items: center;
+  cursor: grab; touch-action: none; color: rgba(255,255,255,.4); border-radius: 8px; font-size: 18px; line-height: 1;
+}
+.handle:hover { background: rgba(255,255,255,.08); color: #fff; }
+.step.dragging .handle { cursor: grabbing; }
+.step .lbl { width: 100%; font-weight: 600; }
+.step .acts { display: flex; gap: 4px; }
+.step .acts button { width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: rgba(255,255,255,.6); font-size: 15px; }
+.step .acts button:hover { background: rgba(255,255,255,.1); color: #fff; }
+.step .dur { grid-column: 2 / 4; display: flex; gap: 6px; align-items: center; font-size: 13px; color: rgba(255,255,255,.6); flex-wrap: wrap; }
+.step .dur .num { width: 56px; padding: 6px; }
+.step .dur select { padding: 6px 8px; margin-left: auto; max-width: 140px; }
+.addrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.saved { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.saved li {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); cursor: pointer;
+}
+.saved li:hover { background: rgba(255,255,255,.09); }
+.saved li.active { border-color: var(--accent); }
+.saved .meta { flex: 1; min-width: 0; }
+.saved .name { font-weight: 600; font-size: 14px; }
+.saved .summary { font-size: 12px; color: rgba(255,255,255,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved .builtin { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.4); }
+
+/* themes */
+.swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.swatch {
+  height: 58px; border-radius: 12px; border: 2px solid transparent; position: relative; overflow: hidden;
+  display: flex; align-items: flex-end; padding: 6px 8px; font-size: 12px; font-weight: 600;
+}
+.swatch.active, .scene.active { border-color: var(--accent); }
+.scenes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.scene { border: 2px solid transparent; border-radius: 14px; padding: 0; background: none; text-align: center; overflow: hidden; }
+.scene .thumb { aspect-ratio: 16 / 10; background: #222 center / cover; border-radius: 12px; }
+.scene .name { display: block; font-size: 13px; font-weight: 500; padding: 6px 0 4px; color: #eee; }
+
+/* alarm overlay */
+#alarm {
+  position: fixed; inset: 0; display: none; place-items: center; z-index: 30;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+#alarm.show { display: grid; }
+.alarm-box {
+  background: var(--panel); color: #fff; border: 1px solid var(--panel-border); border-radius: 20px;
+  padding: 28px 32px; text-align: center; width: min(380px, calc(100vw - 32px));
+  animation: pop .25s ease-out;
+}
+@keyframes pop { from { transform: scale(.92); opacity: 0; } }
+.alarm-box h2 { margin: 0 0 6px; font-size: 24px; }
+.alarm-box p { margin: 0 0 20px; color: rgba(255,255,255,.65); }
+.alarm-box .row { justify-content: center; }
+
+#toast {
+  position: fixed; left: 50%; top: 20px; transform: translate(-50%, -80px); z-index: 40;
+  background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px;
+  transition: transform .3s; box-shadow: 0 6px 20px rgba(0,0,0,.4);
+}
+#toast.show { transform: translate(-50%, 0); }
+
+@media (max-width: 600px) {
+  #topbar .t { display: none; }
+  #topbar button { padding: 0 11px; }
+  #controls { bottom: 16px; gap: 4px; }
+  .grid-presets { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+
+<div id="topbar">
+  <button data-open="timer" title="Quick timers (T)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span class="t">Timer</span></button>
+  <button data-open="chains" title="Programs (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="t">Programs</span></button>
+  <button data-open="sound" title="Sounds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg><span class="t">Sound</span></button>
+  <button data-open="theme" title="Themes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span class="t">Theme</span></button>
+  <button id="fsBtn" title="Fullscreen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+</div>
+
+<main id="stage">
+  <div id="label">Focus</div>
+  <div id="clock">
+    <div class="group" id="gH" hidden></div>
+    <div class="colon" id="cH" hidden>:</div>
+    <div class="group" id="gM"></div>
+    <div class="colon">:</div>
+    <div class="group" id="gS"></div>
+  </div>
+  <div id="sub"></div>
+  <div id="timeline"></div>
+  <div id="quick"></div>
+</main>
+
+<div id="controls">
+  <button class="ctl" id="restartBtn" title="Restart program" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 20 9 12l10-8v16zM5 19V5"/></svg></button>
+  <button class="ctl" id="resetBtn" title="Reset (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg></button>
+  <button class="ctl" id="playBtn" title="Start / Pause (Space)"></button>
+  <button class="ctl" id="plusBtn" title="Add 1 minute"><span class="ctl-text">+1m</span></button>
+  <button class="ctl" id="skipBtn" title="Skip to next step (S)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m5 4 10 8-10 8V4zM19 5v14"/></svg></button>
+</div>
+
+<aside id="drawer" aria-label="Settings">
+  <div class="tabs">
+    <button class="tab" data-tab="timer">Timer</button>
+    <button class="tab" data-tab="chains">Programs</button>
+    <button class="tab" data-tab="sound">Sound</button>
+    <button class="tab" data-tab="theme">Theme</button>
+    <button id="closeDrawer" title="Close (Esc)">×</button>
+  </div>
+
+  <section class="pane" data-pane="timer">
+    <h3>Quick start</h3>
+    <div class="grid-presets" id="presetGrid"></div>
+    <h3>Custom</h3>
+    <div class="row">
+      <input class="field num" id="cH_in" type="number" min="0" max="23" placeholder="0"> h
+      <input class="field num" id="cM_in" type="number" min="0" max="59" placeholder="25"> m
+      <input class="field num" id="cS_in" type="number" min="0" max="59" placeholder="0"> s
+      <button class="btn primary" id="customGo">Start</button>
+    </div>
+    <h3>Timer label</h3>
+    <input class="field" id="quickLabel" style="width:100%" placeholder="Focus">
+    <p class="hint">Shortcuts: <b>Space</b> start/pause · <b>R</b> reset · <b>F</b> fullscreen · <b>S</b> skip step · <b>1–9</b> quick presets · <b>Esc</b> close</p>
+  </section>
+
+  <section class="pane" data-pane="chains">
+    <h3>Program builder</h3>
+    <input class="field" id="chainName" placeholder="Untitled program">
+    <ul id="steps"></ul>
+    <div class="addrow">
+      <button class="btn small" data-add="Study,25">+ Study 25m</button>
+      <button class="btn small" data-add="Study,10">+ Study 10m</button>
+      <button class="btn small" data-add="Break,5">+ Break 5m</button>
+      <button class="btn small" data-add="Long break,15">+ Long break 15m</button>
+      <button class="btn small" data-add=",10">+ Blank step</button>
+    </div>
+    <div class="row" style="margin-top:14px">
+      Repeat <input class="field num" id="repeat" type="number" min="1" max="99" value="1"> times
+      <span id="chainTotal" style="margin-left:auto;color:rgba(255,255,255,.5);font-size:13px"></span>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" id="runChain" style="flex:1">▶ Run program</button>
+      <button class="btn" id="saveChain">Save</button>
+      <button class="btn" id="saveAsChain">Save as new</button>
+      <button class="btn" id="newChain" title="Start a blank program">New</button>
+    </div>
+    <p class="hint">Drag the ⋮⋮ handle to reorder. Steps you don't name are called "Timer 1", "Timer 2", and so on. Give each step its own sound to tell study and break apart by ear.</p>
+    <h3>Saved programs</h3>
+    <ul class="saved" id="savedList"></ul>
+  </section>
+
+  <section class="pane" data-pane="sound">
+    <h3>Alarm sound</h3>
+    <div class="row">
+      <select class="field" id="soundSel" style="flex:1"></select>
+      <button class="btn" id="previewSound">▶ Preview</button>
+    </div>
+    <h3>Volume</h3>
+    <input type="range" id="volume" min="0" max="1" step="0.01">
+    <h3>Behaviour</h3>
+    <label class="toggle">Keep ringing until I dismiss it<input type="checkbox" id="ringLoop"></label>
+    <label class="toggle">Programs: start the next step automatically<input type="checkbox" id="autoAdvance"></label>
+    <label class="toggle">Tick sound while running<input type="checkbox" id="tick"></label>
+    <label class="toggle">Desktop notification when done<input type="checkbox" id="notify"></label>
+    <p class="hint">In a program, each step can override this sound (set it in the Programs tab). When a step ends, its sound plays and the next step begins. When the whole program ends, the alarm plays using the settings above.</p>
+  </section>
+
+  <section class="pane" data-pane="theme">
+    <h3>Colors</h3>
+    <div class="swatches" id="swatches"></div>
+    <h3>Scenic</h3>
+    <div class="scenes" id="scenes"></div>
+    <h3>Your own image</h3>
+    <div class="row">
+      <label class="btn" style="flex:1;text-align:center">Upload image…<input type="file" id="upload" accept="image/*" hidden></label>
+    </div>
+    <h3>Background dimming</h3>
+    <input type="range" id="dim" min="0" max="0.7" step="0.01">
+    <p class="hint">Scenic photos come from Wikimedia Commons. Credits are in backgrounds/CREDITS.md.</p>
+  </section>
+</aside>
+
+<div id="alarm">
+  <div class="alarm-box">
+    <h2 id="alarmTitle">Time's up</h2>
+    <p id="alarmText"></p>
+    <div class="row">
+      <button class="btn" id="alarmSecondary" hidden></button>
+      <button class="btn primary" id="alarmOk">Dismiss</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= storage ================= */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('ft.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('ft.' + k, JSON.stringify(v)); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem('ft.' + k); } catch {} },
+};
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ================= settings ================= */
+const settings = Object.assign({
+  sound: 'chime', volume: 0.7, ringLoop: true, autoAdvance: true, tick: false, notify: false,
+  theme: { type: 'color', id: 'dark' }, dim: 0.25, quickLabel: 'Focus', lastQuickMs: 25 * 60000,
+}, store.get('settings', {}));
+const saveSettings = () => store.set('settings', settings);
+
+/* ================= audio ================= */
+let ctx = null;
+function audio() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+function tone(freq, start, dur, { type = 'sine', gain = 0.3, attack = 0.01, endFreq } = {}) {
+  const a = audio(), t = a.currentTime + start;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain * settings.volume + 0.0001, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.05);
+}
+const SOUNDS = {
+  chime:   { name: 'Soft chime',   play() { [1046.5, 1318.5, 1568, 2093].forEach((f, i) => { tone(f, i * .16, 1.6, { gain: .22 }); tone(f * 2, i * .16, .8, { gain: .05 }); }); } },
+  bell:    { name: 'Bell',         play() { [0, 1.2].forEach(s => [[523, .3], [1444, .12], [2825, .06], [1046, .1]].forEach(([f, g]) => tone(f, s, 2.6, { gain: g, attack: .005 }))); } },
+  digital: { name: 'Digital beep', play() { for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) tone(1000, r * .9 + i * .14, .09, { type: 'square', gain: .12, attack: .002 }); } },
+  rise:    { name: 'Gentle rise',  play() { [392, 494, 587, 784].forEach((f, i) => tone(f, i * .28, 1.1, { gain: .2, attack: .08 })); } },
+  marimba: { name: 'Marimba',      play() { [659, 784, 988, 784, 1319].forEach((f, i) => { tone(f, i * .15, .5, { type: 'triangle', gain: .3, attack: .003 }); tone(f * 4, i * .15, .08, { gain: .05, attack: .002 }); }); } },
+  zen:     { name: 'Zen bowl',     play() { [[220, .3], [442, .14], [661, .08], [1210, .04]].forEach(([f, g]) => tone(f, 0, 5, { gain: g, attack: .02 })); } },
+  arcade:  { name: 'Arcade win',   play() { [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, i * .1, .12, { type: 'square', gain: .1, attack: .002 })); } },
+  none:    { name: 'Silent',       play() {} },
+};
+const playSound = id => (SOUNDS[id] || SOUNDS.chime).play();
+const tickSound = () => tone(1800, 0, .03, { type: 'square', gain: .025, attack: .001 });
+
+let ringTimer = null;
+function startRinging(id) {
+  stopRinging(); playSound(id);
+  if (settings.ringLoop && id !== 'none') {
+    const started = Date.now();
+    ringTimer = setInterval(() => { if (Date.now() - started > 120000) return stopRinging(); playSound(id); }, 3200);
+  }
+}
+function stopRinging() { clearInterval(ringTimer); ringTimer = null; }
+
+function notify(title, body) {
+  if (!settings.notify || !('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, silent: true }); } catch {}
+}
+
+/* ================= flip clock ================= */
+function makeCard(parent) {
+  parent.innerHTML = '<div class="card"><div class="half top"><span></span></div><div class="half bottom"><span></span></div><div class="flap flap-top"><span></span></div><div class="flap flap-bottom"><span></span></div></div>';
+  const card = parent.firstChild;
+  const [top, bottom, ft, fb] = [...card.querySelectorAll('span')];
+  let value = null;
+  card.querySelector('.flap-bottom').addEventListener('animationend', () => { bottom.textContent = value; card.classList.remove('flipping'); });
+  return {
+    set(v, animate = true) {
+      if (v === value) return;
+      const old = value; value = v;
+      if (!animate || old == null || document.hidden) { top.textContent = bottom.textContent = v; card.classList.remove('flipping'); return; }
+      top.textContent = v; ft.textContent = old; fb.textContent = v; bottom.textContent = old;
+      card.classList.remove('flipping'); void card.offsetWidth; card.classList.add('flipping');
+    },
+  };
+}
+const cards = { h: makeCard($('#gH')), m: makeCard($('#gM')), s: makeCard($('#gS')) };
+const pad = n => String(n).padStart(2, '0');
+let showHours = null;
+function renderTime(ms, animate = true) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
+  const needH = h > 0 || (current() && current().ms >= 3600000);
+  if (needH !== showHours) {
+    showHours = needH;
+    $('#gH').hidden = $('#cH').hidden = !needH;
+    $('#clock').classList.toggle('with-hours', needH);
+  }
+  if (needH) cards.h.set(pad(h), animate);
+  cards.m.set(pad(needH ? m : h * 60 + m), animate);
+  cards.s.set(pad(s), animate);
+  const lbl = current() ? current().label : '';
+  document.title = `${needH ? h + ':' : ''}${pad(m)}:${pad(s)} · ${lbl || 'Flip Timer'}`;
+}
+
+/* ================= timer engine ================= */
+const T = { mode: 'quick', chain: null, segments: [], idx: 0, remaining: 0, endAt: 0, running: false };
+const current = () => T.segments[T.idx];
+let lastSecond = null;
+
+const stepName = (s, i) => (s.label && s.label.trim()) || `Timer ${i + 1}`;
+const stepMs = s => ((+s.min || 0) * 60 + (+s.sec || 0)) * 1000;
+const fmt = ms => { const t = Math.round(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+  return h ? `${h}h ${m ? m + 'm' : ''}`.trim() : s ? `${m}:${pad(s)}` : `${m}m`; };
+
+function loadQuick(ms, label) {
+  stopRinging();
+  T.mode = 'quick'; T.chain = null;
+  T.segments = [{ label: label || settings.quickLabel || 'Focus', ms, sound: null }];
+  T.idx = 0; T.remaining = ms; T.running = false;
+  settings.lastQuickMs = ms; saveSettings();
+  refresh(false);
+}
+function loadChain(chain) {
+  const steps = chain.steps.filter(s => stepMs(s) > 0);
+  if (!steps.length) { toast('Add at least one step with a duration'); return false; }
+  stopRinging();
+  const rounds = Math.max(1, +chain.repeat || 1);
+  T.mode = 'chain'; T.chain = chain; T.segments = [];
+  for (let r = 0; r < rounds; r++) chain.steps.forEach((s, i) => {
+    if (stepMs(s) > 0) T.segments.push({ label: stepName(s, i), ms: stepMs(s), sound: s.sound || null, round: r + 1, rounds });
+  });
+  T.idx = 0; T.remaining = T.segments[0].ms; T.running = false;
+  refresh(false);
+  return true;
+}
+function remainingNow() { return T.running ? T.endAt - Date.now() : T.remaining; }
+function start() {
+  if (!T.segments.length) return;
+  audio(); stopRinging(); hideAlarm();
+  if (T.remaining <= 0) T.remaining = current().ms;
+  T.endAt = Date.now() + T.remaining; T.running = true; refresh();
+}
+function pause() { if (!T.running) return; T.remaining = Math.max(0, T.endAt - Date.now()); T.running = false; refresh(); }
+const toggle = () => T.running ? pause() : start();
+function reset() {
+  stopRinging(); hideAlarm();
+  if (!current()) return;
+  const wasRunning = T.running;
+  T.remaining = current().ms; if (wasRunning) T.endAt = Date.now() + T.remaining;
+  refresh(false);
+}
+function restartChain() { if (T.mode !== 'chain') return; T.idx = 0; T.running = false; T.remaining = current().ms; stopRinging(); hideAlarm(); refresh(false); }
+function addMinute() {
+  if (!current()) return;
+  if (T.running) T.endAt += 60000; else T.remaining += 60000;
+  current().ms = Math.max(current().ms, remainingNow());
+  refresh();
+}
+function goTo(i, run) {
+  if (i < 0 || i >= T.segments.length) return;
+  stopRinging(); hideAlarm();
+  T.idx = i; T.remaining = current().ms;
+  T.running = !!run; if (run) T.endAt = Date.now() + T.remaining;
+  refresh(false);
+}
+const skip = () => { if (T.mode === 'chain' && T.idx < T.segments.length - 1) goTo(T.idx + 1, T.running); };
+
+function finishSegment() {
+  const seg = current();
+  const sound = seg.sound || settings.sound;
+  const isLast = T.idx >= T.segments.length - 1;
+  T.running = false; T.remaining = 0;
+  if (!isLast) {
+    const next = T.segments[T.idx + 1];
+    notify(`${seg.label} finished`, `Up next: ${next.label} (${fmt(next.ms)})`);
+    if (settings.autoAdvance) {
+      playSound(sound);
+      toast(`${seg.label} done → ${next.label}`);
+      goTo(T.idx + 1, true);
+    } else {
+      startRinging(sound);
+      T.idx++; T.remaining = current().ms; refresh(false);
+      showAlarm(`${seg.label} finished`, `Up next: ${next.label} · ${fmt(next.ms)}`, `Start ${next.label}`, () => start());
+    }
+  } else {
+    startRinging(sound);
+    const title = T.mode === 'chain' ? `${T.chain.name || 'Program'} complete` : `${seg.label} finished`;
+    notify(title, "Time's up!");
+    renderTime(0); refresh();
+    showAlarm(title, T.mode === 'chain' ? 'Nice work. Every step is done.' : "Time's up!",
+      T.mode === 'chain' ? 'Run again' : 'Restart', () => { T.mode === 'chain' ? goTo(0, true) : (T.remaining = seg.ms, start()); });
+  }
+}
+
+setInterval(() => {
+  if (!T.running) return;
+  const r = T.endAt - Date.now();
+  if (r <= 0) { finishSegment(); return; }
+  const sec = Math.ceil(r / 1000);
+  if (sec !== lastSecond) { lastSecond = sec; renderTime(r); if (settings.tick) tickSound(); }
+}, 100);
+
+/* ================= alarm overlay ================= */
+let alarmAction = null;
+function showAlarm(title, text, secondary, action) {
+  $('#alarmTitle').textContent = title; $('#alarmText').textContent = text;
+  const b = $('#alarmSecondary'); b.hidden = !secondary; b.textContent = secondary || '';
+  alarmAction = action; $('#alarm').classList.add('show');
+}
+function hideAlarm() { $('#alarm').classList.remove('show'); }
+$('#alarmOk').onclick = () => { stopRinging(); hideAlarm(); };
+$('#alarmSecondary').onclick = () => { stopRinging(); hideAlarm(); alarmAction && alarmAction(); };
+
+/* ================= stage render ================= */
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+function refresh(animate = true) {
+  lastSecond = null;
+  renderTime(remainingNow(), animate);
+  const seg = current();
+  $('#label').textContent = seg ? seg.label : '';
+  $('#playBtn').innerHTML = T.running ? ICON_PAUSE : ICON_PLAY;
+  document.body.classList.toggle('running', T.running);
+  const chain = T.mode === 'chain';
+  $('#skipBtn').hidden = !chain; $('#restartBtn').hidden = !chain;
+  let sub = '';
+  if (chain && seg) {
+    const next = T.segments[T.idx + 1];
+    sub = [seg.rounds > 1 ? `Round ${seg.round} of ${seg.rounds}` : '', next ? `Next: ${next.label} · ${fmt(next.ms)}` : 'Last step'].filter(Boolean).join('  ·  ');
+  } else if (!T.running && seg && T.remaining === seg.ms) sub = 'Press space to start';
+  else if (!T.running && seg && T.remaining > 0) sub = 'Paused';
+  $('#sub').textContent = sub;
+  const tl = $('#timeline');
+  if (chain) {
+    tl.innerHTML = T.segments.map((s, i) =>
+      `<button class="chip ${i < T.idx ? 'done' : ''} ${i === T.idx ? 'current' : ''}" data-i="${i}" title="Jump to this step">${esc(s.label)} · ${fmt(s.ms)}</button>`).join('');
+  } else tl.innerHTML = '';
+}
+$('#timeline').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) goTo(+c.dataset.i, T.running); });
+
+/* ================= quick presets ================= */
+const PRESETS = [5, 10, 15, 20, 25, 30, 45, 60];
+$('#quick').innerHTML = PRESETS.map(m => `<button class="pill" data-min="${m}">${m < 60 ? m + ' min' : '1 hr'}</button>`).join('');
+$('#presetGrid').innerHTML = PRESETS.map(m => `<button class="btn" data-min="${m}">${m < 60 ? m + 'm' : '1h'}</button>`).join('');
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-min]'); if (!b) return;
+  loadQuick(+b.dataset.min * 60000); start();
+});
+$('#customGo').onclick = () => {
+  const ms = ((+$('#cH_in').value || 0) * 3600 + (+$('#cM_in').value || 0) * 60 + (+$('#cS_in').value || 0)) * 1000;
+  if (ms <= 0) return toast('Enter a time first');
+  loadQuick(ms); start(); closeDrawer();
+};
+$$('#cH_in,#cM_in,#cS_in').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') $('#customGo').click(); }));
+$('#quickLabel').value = settings.quickLabel;
+$('#quickLabel').oninput = e => {
+  settings.quickLabel = e.target.value; saveSettings();
+  if (T.mode === 'quick' && current()) { current().label = e.target.value || 'Focus'; refresh(false); }
+};
+
+/* ================= controls ================= */
+$('#playBtn').onclick = toggle;
+$('#resetBtn').onclick = reset;
+$('#plusBtn').onclick = addMinute;
+$('#skipBtn').onclick = skip;
+$('#restartBtn').onclick = restartChain;
+function toggleFs() { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }
+$('#fsBtn').onclick = toggleFs;
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') { e.preventDefault(); if ($('#alarm').classList.contains('show')) $('#alarmOk').click(); else toggle(); }
+  else if (k === 'r') reset();
+  else if (k === 'f') toggleFs();
+  else if (k === 's') skip();
+  else if (k === 't') openDrawer('timer');
+  else if (k === 'p') openDrawer('chains');
+  else if (k === 'escape') { if ($('#alarm').classList.contains('show')) $('#alarmOk').click(); else closeDrawer(); }
+  else if (/^[1-8]$/.test(k)) { loadQuick(PRESETS[+k - 1] * 60000); start(); }
+});
+
+// hide UI while running and the mouse is idle
+let idleT;
+function wake() {
+  document.body.classList.remove('idle'); clearTimeout(idleT);
+  idleT = setTimeout(() => { if (T.running && !$('#drawer').classList.contains('open')) document.body.classList.add('idle'); }, 3000);
+}
+['mousemove', 'pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, wake));
+
+/* ================= drawer ================= */
+function openDrawer(tab) {
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  $$('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === tab));
+  $('#drawer').classList.add('open');
+}
+function closeDrawer() { $('#drawer').classList.remove('open'); }
+$$('[data-open]').forEach(b => b.onclick = () => {
+  const open = $('#drawer').classList.contains('open') && $(`.tab[data-tab="${b.dataset.open}"]`).classList.contains('active');
+  open ? closeDrawer() : openDrawer(b.dataset.open);
+});
+$$('.tab').forEach(t => t.onclick = () => openDrawer(t.dataset.tab));
+$('#closeDrawer').onclick = closeDrawer;
+$('#stage').addEventListener('click', e => { if (!e.target.closest('button')) closeDrawer(); });
+
+/* ================= programs (chains) ================= */
+const BUILTIN = [
+  { id: 'b-pomo', builtin: true, name: 'Pomodoro', repeat: 4, steps: [
+    { id: 'a', label: 'Study', min: 25, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: 'rise' }] },
+  { id: 'b-1005', builtin: true, name: 'Study 10 / Break 5', repeat: 3, steps: [
+    { id: 'a', label: 'Study', min: 10, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: 'rise' }] },
+  { id: 'b-deep', builtin: true, name: 'Deep work 50 / 10', repeat: 2, steps: [
+    { id: 'a', label: 'Deep work', min: 50, sec: 0, sound: '' }, { id: 'b', label: 'Rest', min: 10, sec: 0, sound: 'zen' }] },
+];
+let saved = store.get('chains', []);
+const clone = o => JSON.parse(JSON.stringify(o));
+let draft = store.get('draft', null) || Object.assign(clone(BUILTIN[0]), { id: null, builtin: false });
+const saveDraft = () => store.set('draft', draft);
+const persistSaved = () => store.set('chains', saved);
+const summary = c => c.steps.map((s, i) => `${stepName(s, i)} ${fmt(stepMs(s))}`).join(' → ') + (c.repeat > 1 ? `  ×${c.repeat}` : '');
+
+function soundOptions(sel, withDefault) {
+  return (withDefault ? `<option value="">Default sound</option>` : '') +
+    Object.entries(SOUNDS).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v.name}</option>`).join('');
+}
+
+function renderSteps() {
+  $('#chainName').value = draft.name || '';
+  $('#repeat').value = draft.repeat || 1;
+  $('#steps').innerHTML = draft.steps.map((s, i) => `
+    <li class="step" data-id="${s.id}">
+      <span class="handle" title="Drag to reorder">⋮⋮</span>
+      <input class="field lbl" value="${esc(s.label || '')}" placeholder="Timer ${i + 1}" aria-label="Step name">
+      <span class="acts">
+        <button data-act="up" title="Move up">↑</button>
+        <button data-act="dup" title="Duplicate">⧉</button>
+        <button data-act="del" title="Delete">✕</button>
+      </span>
+      <span class="dur">
+        <input class="field num m" type="number" min="0" max="999" value="${+s.min || 0}" aria-label="Minutes"> min
+        <input class="field num s" type="number" min="0" max="59" value="${+s.sec || 0}" aria-label="Seconds"> sec
+        <select class="field snd" aria-label="Sound">${soundOptions(s.sound || '', true)}</select>
+      </span>
+    </li>`).join('');
+  updateTotal();
+}
+function updateTotal() {
+  const one = draft.steps.reduce((a, s) => a + stepMs(s), 0);
+  $('#chainTotal').textContent = one ? `Total ${fmt(one * Math.max(1, draft.repeat || 1))}` : '';
+}
+const findStep = el => draft.steps.find(s => s.id === el.closest('.step').dataset.id);
+
+$('#steps').addEventListener('input', e => {
+  const s = findStep(e.target);
+  if (e.target.classList.contains('lbl')) s.label = e.target.value;
+  else if (e.target.classList.contains('m')) s.min = Math.max(0, +e.target.value || 0);
+  else if (e.target.classList.contains('s')) s.sec = Math.min(59, Math.max(0, +e.target.value || 0));
+  else if (e.target.classList.contains('snd')) { s.sound = e.target.value; if (e.target.value) playSound(e.target.value); }
+  saveDraft(); updateTotal();
+});
+$('#steps').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const s = findStep(b), i = draft.steps.indexOf(s);
+  if (b.dataset.act === 'del') draft.steps.splice(i, 1);
+  else if (b.dataset.act === 'dup') draft.steps.splice(i + 1, 0, Object.assign(clone(s), { id: uid() }));
+  else if (b.dataset.act === 'up' && i > 0) draft.steps.splice(i - 1, 0, draft.steps.splice(i, 1)[0]);
+  saveDraft(); renderSteps();
+});
+
+// pointer-based drag & drop (works with mouse, trackpad and touch)
+$('#steps').addEventListener('pointerdown', e => {
+  const handle = e.target.closest('.handle'); if (!handle) return;
+  e.preventDefault();
+  const list = $('#steps'), li = handle.closest('.step');
+  const startY = e.clientY;
+  let offset = 0;
+  li.classList.add('dragging');
+  const move = ev => {
+    // put the dragged item where the pointer is, relative to the other items' midpoints
+    const y = ev.clientY;
+    const others = [...list.children].filter(x => x !== li);
+    const before = others.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    const prevTop = li.getBoundingClientRect().top;
+    if (before) { if (li.nextElementSibling !== before) list.insertBefore(li, before); }
+    else if (list.lastElementChild !== li) list.appendChild(li);
+    offset += li.getBoundingClientRect().top - prevTop;
+    li.style.transform = `translateY(${y - startY - offset}px)`;
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    li.classList.remove('dragging'); li.style.transform = '';
+    const order = [...list.children].map(x => x.dataset.id);
+    draft.steps.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    saveDraft(); renderSteps();
+  };
+  // listen on window: moving the item in the DOM drops pointer capture
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+});
+
+$$('[data-add]').forEach(b => b.onclick = () => {
+  const [label, min] = b.dataset.add.split(',');
+  draft.steps.push({ id: uid(), label, min: +min, sec: 0, sound: /break|rest/i.test(label) ? 'rise' : '' });
+  saveDraft(); renderSteps();
+  const items = $('#steps').children; items[items.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+$('#chainName').oninput = e => { draft.name = e.target.value; saveDraft(); };
+$('#repeat').oninput = e => { draft.repeat = Math.max(1, Math.min(99, +e.target.value || 1)); saveDraft(); updateTotal(); };
+
+function saveChain(asNew) {
+  if (!draft.steps.length) return toast('Add a step first');
+  if (!draft.name || !draft.name.trim()) {
+    const n = prompt('Name this program:', 'My program'); if (!n) return;
+    draft.name = n.trim(); $('#chainName').value = draft.name;
+  }
+  const existing = !asNew && draft.id && saved.find(c => c.id === draft.id);
+  if (existing) Object.assign(existing, clone(draft));
+  else { draft.id = uid(); saved.unshift(clone(draft)); }
+  persistSaved(); saveDraft(); renderSaved(); toast(`Saved “${draft.name}”`);
+}
+$('#saveChain').onclick = () => saveChain(false);
+$('#saveAsChain').onclick = () => saveChain(true);
+$('#newChain').onclick = () => {
+  draft = { id: null, name: '', repeat: 1, steps: [{ id: uid(), label: '', min: 25, sec: 0, sound: '' }] };
+  saveDraft(); renderSteps(); renderSaved(); $('#chainName').focus();
+};
+$('#runChain').onclick = () => { if (loadChain(clone(draft))) { start(); closeDrawer(); } };
+
+function renderSaved() {
+  const all = [...saved, ...BUILTIN];
+  $('#savedList').innerHTML = all.map(c => `
+    <li data-id="${c.id}" class="${draft.id === c.id ? 'active' : ''}" title="Click to edit">
+      <div class="meta">
+        <div class="name">${esc(c.name || 'Untitled')} ${c.builtin ? '<span class="builtin">built-in</span>' : ''}</div>
+        <div class="summary">${esc(summary(c))}</div>
+      </div>
+      <button class="btn small primary" data-run title="Run now">▶</button>
+      ${c.builtin ? '' : '<button class="btn small danger" data-del title="Delete">✕</button>'}
+    </li>`).join('');
+}
+$('#savedList').addEventListener('click', e => {
+  const li = e.target.closest('li'); if (!li) return;
+  const c = [...saved, ...BUILTIN].find(x => x.id === li.dataset.id);
+  if (e.target.closest('[data-del]')) {
+    if (!confirm(`Delete “${c.name}”?`)) return;
+    saved = saved.filter(x => x !== c); persistSaved();
+    if (draft.id === c.id) draft.id = null;
+    renderSaved(); return;
+  }
+  // built-ins load as a copy so editing them never changes the original
+  draft = c.builtin ? Object.assign(clone(c), { id: null, builtin: false, steps: c.steps.map(s => ({ ...s, id: uid() })) }) : clone(c);
+  saveDraft(); renderSteps(); renderSaved();
+  if (e.target.closest('[data-run]')) { if (loadChain(clone(draft))) { start(); closeDrawer(); } }
+});
+
+/* ================= sound pane ================= */
+$('#soundSel').innerHTML = soundOptions(settings.sound, false);
+$('#soundSel').onchange = e => { settings.sound = e.target.value; saveSettings(); playSound(settings.sound); };
+$('#previewSound').onclick = () => playSound(settings.sound);
+$('#volume').value = settings.volume;
+$('#volume').oninput = e => { settings.volume = +e.target.value; saveSettings(); };
+$('#volume').onchange = () => playSound(settings.sound);
+['ringLoop', 'autoAdvance', 'tick'].forEach(k => {
+  $('#' + k).checked = settings[k];
+  $('#' + k).onchange = e => { settings[k] = e.target.checked; saveSettings(); };
+});
+$('#notify').checked = settings.notify;
+$('#notify').onchange = async e => {
+  if (e.target.checked && 'Notification' in window && Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') { e.target.checked = false; toast('Notifications are blocked in this browser'); }
+  }
+  settings.notify = e.target.checked; saveSettings();
+};
+
+/* ================= themes ================= */
+const COLORS = {
+  dark:     { name: 'Classic',  bg: '#0d0d0f', card: '#1c1c1f', digit: '#ececec', text: '#f2f2f2', accent: '#7c5cff' },
+  light:    { name: 'Paper',    bg: '#e9e7e2', card: '#fbfaf7', digit: '#1f1f1f', text: '#1f1f1f', accent: '#1f1f1f', light: true },
+  midnight: { name: 'Midnight', bg: '#0a1222', card: '#15223d', digit: '#dce8ff', text: '#dce8ff', accent: '#4f8cff' },
+  forest:   { name: 'Forest',   bg: '#0e1a13', card: '#1a2c21', digit: '#d6f0de', text: '#d6f0de', accent: '#3fb27f' },
+  sunset:   { name: 'Sunset',   bg: 'linear-gradient(135deg,#ff9a8b,#ff6a88 55%,#ff99ac)', card: 'rgba(60,10,30,.35)', digit: '#fff', text: '#fff', accent: '#ff3d6e' },
+  lilac:    { name: 'Lilac',    bg: '#e8e2f6', card: '#ffffff', digit: '#4e3d86', text: '#4e3d86', accent: '#7c5cff', light: true },
+  ocean:    { name: 'Ocean',    bg: 'linear-gradient(160deg,#0f2b46,#126e82)', card: 'rgba(0,20,40,.4)', digit: '#e6fbff', text: '#e6fbff', accent: '#1fc8db' },
+  ember:    { name: 'Ember',    bg: '#1a0f0a', card: '#2b1a12', digit: '#ffb37a', text: '#ffd9bd', accent: '#ff7a2f' },
+  mono:     { name: 'Mono',     bg: '#000', card: '#000', digit: '#fff', text: '#fff', accent: '#fff', accentText: '#000' },
+};
+const SCENES = [
+  ['lofi-clouds', 'Lofi Clouds'], ['dusk-peak', 'Dusk Peak'], ['tuscan-village', 'Tuscan Village'],
+  ['cotton-candy-sky', 'Cotton Candy Sky'], ['morning-sakura', 'Morning Sakura'], ['superbloom', 'Superbloom'],
+  ['fuji-convenience', 'Fuji Town'], ['dune-night', 'Dune Night'], ['dune-sunrise', 'Dune Sunrise'],
+  ['outer-space', 'Outer Space'], ['austrian-alps', 'Austrian Alps'], ['tropical-river', 'Tropical River'],
+  ['lavender-field', 'Lavender Field'], ['western-town', 'Western Town'], ['capri-summer', 'Capri Summer'],
+  ['golden-gate-fog', 'Golden Gate Fog'], ['sakura-street', 'Sakura Street'], ['beach-sunset', 'Beach Sunset'],
+  ['coastal-breeze', 'Coastal Breeze'], ['lake-como-path', 'Lake Como Path'], ['autumn-hollow', 'Autumn Hollow'],
+  ['fall-central-park', 'Fall Central Park'],
+];
+
+function applyTheme() {
+  const th = settings.theme, root = document.documentElement.style;
+  const scenic = th.type !== 'color';
+  const c = scenic ? COLORS.dark : (COLORS[th.id] || COLORS.dark);
+  document.body.classList.toggle('scenic', scenic);
+  document.body.classList.toggle('light-ui', !scenic && !!c.light);
+  root.setProperty('--bg', c.bg.includes('gradient') ? '#111' : c.bg);
+  $('#bg').style.backgroundImage = '';
+  if (scenic) {
+    const url = th.type === 'custom' ? store.get('customBg', null) : `backgrounds/${th.id}.jpg`;
+    if (url) $('#bg').style.backgroundImage = `url("${url}")`;
+    root.setProperty('--card', 'rgba(20,20,24,.42)');
+    root.setProperty('--card-blur', '18px');
+    root.setProperty('--digit', '#fff'); root.setProperty('--text', '#fff');
+    root.setProperty('--muted', 'rgba(255,255,255,.8)');
+  } else {
+    if (c.bg.includes('gradient')) $('#bg').style.backgroundImage = c.bg;
+    root.setProperty('--card', c.card); root.setProperty('--card-blur', c.card.startsWith('rgba') ? '14px' : '0px');
+    root.setProperty('--digit', c.digit); root.setProperty('--text', c.text);
+    root.setProperty('--muted', c.light ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)');
+  }
+  root.setProperty('--card-line', c.light && !scenic ? 'rgba(0,0,0,.12)' : 'rgba(0,0,0,.5)');
+  root.setProperty('--panel-border', c.light && !scenic ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.1)');
+  root.setProperty('--accent', scenic ? '#7c5cff' : c.accent);
+  root.setProperty('--accent-text', (!scenic && c.accentText) || '#fff');
+  root.setProperty('--dim', settings.dim);
+  $$('.swatch').forEach(s => s.classList.toggle('active', th.type === 'color' && s.dataset.id === th.id));
+  $$('.scene').forEach(s => s.classList.toggle('active', (th.type === 'scene' && s.dataset.id === th.id) || (th.type === 'custom' && s.dataset.id === '__custom')));
+}
+$('#swatches').innerHTML = Object.entries(COLORS).map(([k, c]) =>
+  `<button class="swatch" data-id="${k}" style="background:${c.bg};color:${c.digit}"><span style="position:absolute;right:8px;top:8px;width:18px;height:22px;border-radius:4px;background:${c.card}"></span>${c.name}</button>`).join('');
+function renderScenes() {
+  const custom = store.get('customBg', null);
+  $('#scenes').innerHTML = (custom ? `<button class="scene" data-id="__custom"><div class="thumb" style="background-image:url('${custom}')"></div><span class="name">My image</span></button>` : '') +
+    SCENES.map(([id, name]) => `<button class="scene" data-id="${id}"><div class="thumb" style="background-image:url('backgrounds/thumbs/${id}.jpg')"></div><span class="name">${name}</span></button>`).join('');
+}
+$('#swatches').addEventListener('click', e => { const s = e.target.closest('.swatch'); if (!s) return; settings.theme = { type: 'color', id: s.dataset.id }; saveSettings(); applyTheme(); });
+$('#scenes').addEventListener('click', e => {
+  const s = e.target.closest('.scene'); if (!s) return;
+  settings.theme = s.dataset.id === '__custom' ? { type: 'custom' } : { type: 'scene', id: s.dataset.id };
+  saveSettings(); applyTheme();
+});
+$('#dim').value = settings.dim;
+$('#dim').oninput = e => { settings.dim = +e.target.value; saveSettings(); document.documentElement.style.setProperty('--dim', settings.dim); };
+$('#upload').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    // downscale so it fits in browser storage
+    const scale = Math.min(1, 2400 / img.width), cv = document.createElement('canvas');
+    cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    let data = cv.toDataURL('image/jpeg', 0.85);
+    if (!store.set('customBg', data)) { data = cv.toDataURL('image/jpeg', 0.6); if (!store.set('customBg', data)) return toast('Image too large to save'); }
+    URL.revokeObjectURL(img.src);
+    settings.theme = { type: 'custom' }; saveSettings(); renderScenes(); applyTheme(); toast('Background updated');
+  };
+  img.src = URL.createObjectURL(f);
+  e.target.value = '';
+};
+
+/* ================= boot ================= */
+renderScenes(); applyTheme(); renderSteps(); renderSaved();
+loadQuick(settings.lastQuickMs || 25 * 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(false); });
+})();
+</script>
+</body>
+</html>
