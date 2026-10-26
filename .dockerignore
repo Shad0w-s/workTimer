@@ -1,0 +1,5 @@
+.git
+.claude
+backgrounds/art
+*.md
+!backgrounds/CREDITS.md
