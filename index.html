@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0d0d0f;
+  --bg: #000;
   --bg-image: none;
   --card: #1c1c1f;
   --card-line: rgba(0,0,0,.55);
@@ -102,6 +102,13 @@ body:not(.scenic) #bg::after { opacity: 0; }
 .card.flipping .flap { visibility: visible; }
 .card.flipping .flap-top { animation: flipTop .28s ease-in forwards; }
 .card.flipping .flap-bottom { animation: flipBottom .28s .28s ease-out forwards; }
+/* simple style: plain digits, no cards */
+body.simple .half, body.simple .flap { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.simple .card { box-shadow: none; width: calc(var(--h) * 1.05); }
+body.simple .top::after { display: none; }
+body.simple #clock { gap: 0; }
+body.simple .colon { opacity: .9; }
+#styleBtn .t { min-width: 3.2em; text-align: left; }
 @keyframes flipTop { from { transform: rotateX(0); filter: brightness(1); } to { transform: rotateX(-90deg); filter: brightness(.6); } }
 @keyframes flipBottom { from { transform: rotateX(90deg); filter: brightness(1.4); } to { transform: rotateX(0); filter: brightness(1); } }
 
@@ -298,6 +305,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   <button data-open="chains" title="Programs (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span class="t">Programs</span></button>
   <button data-open="sound" title="Sounds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg><span class="t">Sound</span></button>
   <button data-open="theme" title="Themes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span class="t">Theme</span></button>
+  <button id="styleBtn" title="Clock style: flip / no animation / simple (A)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/><path d="M3 12h8M13 12h8"/></svg><span class="t">Flip</span></button>
   <button id="fsBtn" title="Fullscreen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
 </div>
 
@@ -344,7 +352,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     </div>
     <h3>Timer label</h3>
     <input class="field" id="quickLabel" style="width:100%" placeholder="Focus">
-    <p class="hint">Shortcuts: <b>Space</b> start/pause · <b>R</b> reset · <b>F</b> fullscreen · <b>S</b> skip step · <b>1–9</b> quick presets · <b>Esc</b> close</p>
+    <p class="hint">Shortcuts: <b>Space</b> start/pause · <b>R</b> reset · <b>F</b> fullscreen · <b>A</b> clock style · <b>S</b> skip step · <b>1–9</b> quick presets · <b>Esc</b> close</p>
   </section>
 
   <section class="pane" data-pane="chains">
@@ -374,7 +382,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
   </section>
 
   <section class="pane" data-pane="sound">
-    <h3>Alarm sound</h3>
+    <h3>Default alarm sound</h3>
     <div class="row">
       <select class="field" id="soundSel" style="flex:1"></select>
       <button class="btn" id="previewSound">▶ Preview</button>
@@ -386,10 +394,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
     <label class="toggle">Programs: start the next step automatically<input type="checkbox" id="autoAdvance"></label>
     <label class="toggle">Tick sound while running<input type="checkbox" id="tick"></label>
     <label class="toggle">Desktop notification when done<input type="checkbox" id="notify"></label>
-    <p class="hint">In a program, each step can override this sound (set it in the Programs tab). When a step ends, its sound plays and the next step begins. When the whole program ends, the alarm plays using the settings above.</p>
+    <p class="hint">This is your default: quick timers and every program step left on "Default" use it. A step can pick its own sound in the Programs tab if you want study and break to sound different. When a step ends, its sound plays and the next step begins. When the whole program ends, the alarm plays using the settings above.</p>
   </section>
 
   <section class="pane" data-pane="theme">
+    <h3>Clock style</h3>
+    <div class="row" id="styleSeg">
+      <button class="btn small" data-style="flip">Flip (animated)</button>
+      <button class="btn small" data-style="still">Flip, no animation</button>
+      <button class="btn small" data-style="simple">Simple</button>
+    </div>
     <h3>Colors</h3>
     <div class="swatches" id="swatches"></div>
     <h3>Scenic</h3>
@@ -439,7 +453,8 @@ function toast(msg) {
 /* ================= settings ================= */
 const settings = Object.assign({
   sound: 'chime', volume: 0.7, ringLoop: true, autoAdvance: true, tick: false, notify: false,
-  theme: { type: 'color', id: 'dark' }, dim: 0.25, quickLabel: 'Focus', lastQuickMs: 25 * 60000,
+  theme: { type: 'color', id: 'dark' }, dim: 0.25,
+  clockStyle: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'flip', quickLabel: 'Focus', lastQuickMs: 25 * 60000,
 }, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 
@@ -499,7 +514,7 @@ function makeCard(parent) {
     set(v, animate = true) {
       if (v === value) return;
       const old = value; value = v;
-      if (!animate || old == null || document.hidden) { top.textContent = bottom.textContent = v; card.classList.remove('flipping'); return; }
+      if (!animate || old == null || document.hidden || settings.clockStyle !== 'flip') { top.textContent = bottom.textContent = v; card.classList.remove('flipping'); return; }
       top.textContent = v; ft.textContent = old; fb.textContent = v; bottom.textContent = old;
       card.classList.remove('flipping'); void card.offsetWidth; card.classList.add('flipping');
     },
@@ -696,6 +711,7 @@ document.addEventListener('keydown', e => {
   if (k === ' ') { e.preventDefault(); if ($('#alarm').classList.contains('show')) $('#alarmOk').click(); else toggle(); }
   else if (k === 'r') reset();
   else if (k === 'f') toggleFs();
+  else if (k === 'a') cycleStyle();
   else if (k === 's') skip();
   else if (k === 't') openDrawer('timer');
   else if (k === 'p') openDrawer('chains');
@@ -710,6 +726,18 @@ function wake() {
   idleT = setTimeout(() => { if (T.running && !$('#drawer').classList.contains('open')) document.body.classList.add('idle'); }, 3000);
 }
 ['mousemove', 'pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, wake));
+
+/* ================= clock style ================= */
+const STYLES = { flip: 'Flip', still: 'Static', simple: 'Simple' };
+function applyStyle() {
+  document.body.classList.toggle('simple', settings.clockStyle === 'simple');
+  $('#styleBtn .t').textContent = STYLES[settings.clockStyle];
+  $$('#styleSeg [data-style]').forEach(b => b.classList.toggle('primary', b.dataset.style === settings.clockStyle));
+}
+function setStyle(st) { settings.clockStyle = st; saveSettings(); applyStyle(); toast(`Clock style: ${STYLES[st]}`); }
+function cycleStyle() { const k = Object.keys(STYLES); setStyle(k[(k.indexOf(settings.clockStyle) + 1) % k.length]); }
+$('#styleBtn').onclick = cycleStyle;
+$('#styleSeg').addEventListener('click', e => { const b = e.target.closest('[data-style]'); if (b) setStyle(b.dataset.style); });
 
 /* ================= drawer ================= */
 function openDrawer(tab) {
@@ -729,13 +757,20 @@ $('#stage').addEventListener('click', e => { if (!e.target.closest('button')) cl
 /* ================= programs (chains) ================= */
 const BUILTIN = [
   { id: 'b-pomo', builtin: true, name: 'Pomodoro', repeat: 4, steps: [
-    { id: 'a', label: 'Study', min: 25, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: 'rise' }] },
+    { id: 'a', label: 'Study', min: 25, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: '' }] },
   { id: 'b-1005', builtin: true, name: 'Study 10 / Break 5', repeat: 3, steps: [
-    { id: 'a', label: 'Study', min: 10, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: 'rise' }] },
+    { id: 'a', label: 'Study', min: 10, sec: 0, sound: '' }, { id: 'b', label: 'Break', min: 5, sec: 0, sound: '' }] },
   { id: 'b-deep', builtin: true, name: 'Deep work 50 / 10', repeat: 2, steps: [
-    { id: 'a', label: 'Deep work', min: 50, sec: 0, sound: '' }, { id: 'b', label: 'Rest', min: 10, sec: 0, sound: 'zen' }] },
+    { id: 'a', label: 'Deep work', min: 50, sec: 0, sound: '' }, { id: 'b', label: 'Rest', min: 10, sec: 0, sound: '' }] },
 ];
 let saved = store.get('chains', []);
+// one-time: earlier versions pre-set break steps to their own sound; put them back on the default
+if (!settings.breakSoundsReset) {
+  const fix = c => c && c.steps.forEach(s => { if (/break|rest/i.test(s.label || '') && (s.sound === 'rise' || s.sound === 'zen')) s.sound = ''; });
+  saved.forEach(fix); const d = store.get('draft', null); fix(d);
+  store.set('chains', saved); if (d) store.set('draft', d);
+  settings.breakSoundsReset = true; saveSettings();
+}
 const clone = o => JSON.parse(JSON.stringify(o));
 let draft = store.get('draft', null) || Object.assign(clone(BUILTIN[0]), { id: null, builtin: false });
 const saveDraft = () => store.set('draft', draft);
@@ -743,7 +778,7 @@ const persistSaved = () => store.set('chains', saved);
 const summary = c => c.steps.map((s, i) => `${stepName(s, i)} ${fmt(stepMs(s))}`).join(' → ') + (c.repeat > 1 ? `  ×${c.repeat}` : '');
 
 function soundOptions(sel, withDefault) {
-  return (withDefault ? `<option value="">Default sound</option>` : '') +
+  return (withDefault ? `<option value="">Default (${SOUNDS[settings.sound]?.name || 'Chime'})</option>` : '') +
     Object.entries(SOUNDS).map(([k, v]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${v.name}</option>`).join('');
 }
 
@@ -826,7 +861,7 @@ $('#steps').addEventListener('pointerdown', e => {
 
 $$('[data-add]').forEach(b => b.onclick = () => {
   const [label, min] = b.dataset.add.split(',');
-  draft.steps.push({ id: uid(), label, min: +min, sec: 0, sound: /break|rest/i.test(label) ? 'rise' : '' });
+  draft.steps.push({ id: uid(), label, min: +min, sec: 0, sound: '' });
   saveDraft(); renderSteps();
   const items = $('#steps').children; items[items.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
@@ -881,7 +916,10 @@ $('#savedList').addEventListener('click', e => {
 
 /* ================= sound pane ================= */
 $('#soundSel').innerHTML = soundOptions(settings.sound, false);
-$('#soundSel').onchange = e => { settings.sound = e.target.value; saveSettings(); playSound(settings.sound); };
+$('#soundSel').onchange = e => {
+  settings.sound = e.target.value; saveSettings(); playSound(settings.sound);
+  renderSteps(); toast(`Default sound: ${SOUNDS[settings.sound].name}`);
+};
 $('#previewSound').onclick = () => playSound(settings.sound);
 $('#volume').value = settings.volume;
 $('#volume').oninput = e => { settings.volume = +e.target.value; saveSettings(); };
@@ -901,7 +939,7 @@ $('#notify').onchange = async e => {
 
 /* ================= themes ================= */
 const COLORS = {
-  dark:     { name: 'Classic',  bg: '#0d0d0f', card: '#1c1c1f', digit: '#ececec', text: '#f2f2f2', accent: '#7c5cff' },
+  dark:     { name: 'Classic',  bg: '#000000', card: '#161616', digit: '#ececec', text: '#f2f2f2', accent: '#7c5cff' },
   light:    { name: 'Paper',    bg: '#e9e7e2', card: '#fbfaf7', digit: '#1f1f1f', text: '#1f1f1f', accent: '#1f1f1f', light: true },
   midnight: { name: 'Midnight', bg: '#0a1222', card: '#15223d', digit: '#dce8ff', text: '#dce8ff', accent: '#4f8cff' },
   forest:   { name: 'Forest',   bg: '#0e1a13', card: '#1a2c21', digit: '#d6f0de', text: '#d6f0de', accent: '#3fb27f' },
@@ -984,7 +1022,7 @@ $('#upload').onchange = e => {
 };
 
 /* ================= boot ================= */
-renderScenes(); applyTheme(); renderSteps(); renderSaved();
+renderScenes(); applyTheme(); applyStyle(); renderSteps(); renderSaved();
 loadQuick(settings.lastQuickMs || 25 * 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(false); });
 })();
